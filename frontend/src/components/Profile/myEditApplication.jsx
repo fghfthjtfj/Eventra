@@ -1,0 +1,329 @@
+import { useParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import axios from '../../axios';
+import FrameAdd from "../../images/FrameAdd.png";
+import zvezda from "../../images/zvezda.svg";
+import attention from "../../images/attention.svg";
+import { useCategories } from "../../context/categoryContext";
+import { DarkButton } from "../UI/Button/button";
+import { useUser } from '../../context/userContext';
+import Loader from '../UI/Loader/loader';
+import { useCities } from "../../context/citiesContext";
+import { useState, useEffect, useRef } from "react";
+
+
+const EditMyApplication = () => {
+    const { id } = useParams();
+    const { categories } = useCategories();
+    const { user } = useUser()
+    const [orders, setOrders] = useState([])
+    const [applications, setApplications] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [loading2, setLoading2] = useState(true)
+    const [application, setApplication] = useState(null);
+    const [disabled, setDisabled] = useState(false)
+    const [formData, setFormData] = useState({
+        eventName: '',
+        category: [],
+        city: '',
+        feeFrom: '',
+        feeTo: '',
+        eventDetails: '',
+        date: '',
+        timeInterval: '',
+        guestCount: '50-100',
+    });
+
+    const [personAccept, setPersonAccept] = useState(false);
+const [cityInput, setCityInput] = useState("");
+const [filteredCities, setFilteredCities] = useState([]);
+const [showCityDropdown, setShowCityDropdown] = useState(false);
+const cityInputRef = useRef(null);
+    useEffect(() => {
+        if (user) {
+            axios.get("/order", { params: { customerId: user._id } })
+                .then((res) => {
+                    setOrders(res.data)
+                })
+                .catch((err) => {
+                    console.log(err)
+                })
+                .finally(() => {
+                    setLoading(false)
+                })
+        }
+        if (user) {
+            axios.get(`/customer-requests?customerId=${user._id}`)
+                .then((res) => {
+                    setApplications(res.data);
+                    const foundApplication = res.data.find((el) => el._id === id);
+                    setApplication(foundApplication);
+                    setLoading2(false)
+                })
+                .catch((err) => {
+                    console.log(err);
+                })
+        }
+    }, [user, id]);
+
+    useEffect(() => {
+        if (application) {
+            setFormData({
+                eventName: application.eventName || '',
+                category: application.categoryId.map((el) => (el._id)),
+                city: application.city || '',
+                feeFrom: application.fee.split(' - ')[0] || '',
+                feeTo: application.fee.split(' - ')[1] || '',
+                eventDetails: application.description || '',
+                date: application.date ? application.date.split('T')[0] : '',
+                timeInterval: application.time || '',
+                guestCount: application.guestCount || '50-100',
+            });
+        }
+    }, [application]);
+
+    const { cities } = useCities()
+    const handleCityInputChange = (e) => {
+      const value = e.target.value;
+      setFormData(prevData => ({
+        ...prevData,
+        city: value, // <-- именно city, а не setCitySearch
+      }));
+
+      // Далее можно делать фильтрацию:
+      if (value.length > 0) {
+        const filtered = cities.filter(city =>
+          city.toLowerCase().startsWith(value.toLowerCase())
+        );
+        setFilteredCities(filtered);
+        setShowCityDropdown(filtered.length > 0);
+      } else {
+        setFilteredCities([]);
+        setShowCityDropdown(false);
+      }
+    };
+
+    const handleCitySelect = (city) => {
+        setCityInput(city);
+        setFormData(prevData => ({
+            ...prevData,
+            city: city,
+        }));
+        setFilteredCities([]);
+        setShowCityDropdown(false);
+    };
+    const handleChange = (e) => {
+        const { name, value, options } = e.target;
+        if (name === 'category') {
+            const selectedOptions = Array.from(options).filter(option => option.selected).map(option => option.value);
+            setFormData({ ...formData, [name]: selectedOptions });
+        } else {
+            setFormData({ ...formData, [name]: value });
+        }
+    };
+
+    const handleSubmit = async (e) => {
+
+        e.preventDefault();
+
+        setDisabled(true)
+        try {
+            const response = await axios.patch('/customer-request', { isReject: false, approved: false, fee: formData.feeFrom + ' - ' + formData.feeTo, eventName: formData.eventName, description: formData.eventDetails, city: formData.city, requestId: id, categoryId: formData.category, date: formData.date, time: formData.timeInterval, guestCount: formData.guestCount, approved: false });
+            if (response.status === 200) {
+                window.location.href = "/application-done";
+            }
+        } catch (error) {
+            console.error('Error submitting form', error);
+            setDisabled(false)
+        }
+    };
+
+    if (loading || loading2) {
+        return <Loader />
+    }
+
+    return (
+        <div className="px-[16px] bg-main">
+            <div className="py-[44px] flex gap-[33px] justify-center flex-wrap">
+                <div className="underline font-bold text-[20px]">Редактирование заявки</div><Link to={"/my-applications"} className="text-[20px] opacity-60" >Мои заявки ({applications.length + orders.length})</Link>
+            </div>
+            <div>
+                <form className=" px-[16px]" onSubmit={handleSubmit}>
+
+                    <div className="mt-[0px]">
+                        <div className="text-[20px] font-bold">Ваша заявка</div>
+                    </div>
+                    <div className="mt-[27px] flex flex-col gap-[24px]">
+                        <div className="flex flex-col gap-[8px]">
+                            <div className="flex text-[14px] opacity-70 gap-[8px]">
+                                <div>Названия вашего мероприятия</div>
+                                <div><img src={zvezda} alt="zvezda" /></div>
+                            </div>
+                            <div>
+                                <input
+                                    type="text"
+                                    name="eventName"
+                                    placeholder="Детский праздник"
+                                    value={formData.eventName}
+                                    onChange={handleChange}
+                                    required
+                                    className="px-[24px] py-[16px] border-black border-solid border-2 w-full"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex flex-col gap-[8px]">
+                            <div className="flex text-[14px] opacity-70 gap-[8px]">
+                                <div>Категория</div>
+                                <div><img src={zvezda} alt="zvezda" /></div>
+                            </div>
+                            <div className="select-wrapper">
+                                <select
+                                    className="custom-select"
+                                    name="category"
+                                    value={formData.category}
+                                    onChange={handleChange}
+                                    required
+                                >
+                                    {categories.map((el) => (
+                                        <option key={el._id} value={el._id}>{el.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        {/* Город с автозаполнением */}
+                        <div className="flex flex-col gap-[8px]" ref={cityInputRef}>
+                            <div className="flex text-[14px] opacity-70 gap-[8px]">
+                                <div>Город</div>
+                                <div><img src={zvezda} alt="zvezda" /></div>
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Начните вводить город..."
+                                value={formData.city}
+                                onChange={handleCityInputChange}
+                                className="px-[24px] py-[16px] border-black border-solid border-2 w-full"
+                            />
+                            {showCityDropdown && (
+                                <ul className="absolute bg-white border border-gray-300 w-full max-h-60 overflow-y-auto z-20">
+                                    {filteredCities.map((city, index) => (
+                                        <li
+                                            key={index}
+                                            onClick={() => handleCitySelect(city)}
+                                            className="px-4 py-2 hover:bg-gray-200 cursor-pointer"
+                                        >
+                                            {city}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                        <div className="flex flex-col gap-[8px]">
+                            <div className="flex text-[14px] opacity-70 gap-[8px]">
+                                <div>Гонорар</div>
+                                <div><img src={zvezda} alt="zvezda" /></div>
+                            </div>
+                            <div className="flex gap-2 text-[12px] items-center">
+                                <img src={attention} alt="attention" />Укажите диапазон цен
+                            </div>
+                            <div className="flex items-center gap-[8px]">
+                                <input
+                                    type="text"
+                                    name="feeFrom"
+                                    placeholder="От 1 000 ₽"
+                                    value={formData.feeFrom}
+                                    onChange={handleChange}
+                                    required
+                                    className="px-[24px] py-[16px] border-black border-solid border-2 w-full"
+                                />
+                                <input
+                                    type="text"
+                                    name="feeTo"
+                                    placeholder="До 10 000 ₽"
+                                    value={formData.feeTo}
+                                    onChange={handleChange}
+                                    required
+                                    className="px-[24px] py-[16px] border-black border-solid border-2 w-full"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex flex-col gap-[8px]">
+                            <div className="flex text-[14px] opacity-70 gap-[8px]">
+                                <div>О вашем мероприятии</div>
+                            </div>
+                            <div className="flex items-center gap-[8px]">
+                                <textarea
+                                    className="h-[132px] px-[24px] py-[16px] border-black border-solid border-2 w-full"
+                                    name="eventDetails"
+                                    placeholder="Добавьте больше деталей о вашем событии, чтобы привлечь артистов. Яркое описание увеличивает шансы на получение откликов!"
+                                    value={formData.eventDetails}
+                                    onChange={handleChange}
+                                ></textarea>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="flex flex-col gap-[8px] w-1/2">
+                                <div className="flex text-[14px] opacity-70 gap-[8px]">
+                                    <div>Дата</div>
+                                    <div><img src={zvezda} alt="zvezda" /></div>
+                                </div>
+                                <div>
+                                    <input
+                                        type="date"
+                                        name="date"
+                                        value={formData.date}
+                                        onChange={handleChange}
+                                        required
+                                        className="h-[59px] px-[24px] py-[16px] border-black border-solid border-2 w-full"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex flex-col gap-[8px]">
+                                <div className="flex text-[14px] opacity-70 gap-[8px]">
+                                    <div>Временной интервал</div>
+                                </div>
+                                <div>
+                                    <input
+                                        type="text"
+                                        name="timeInterval"
+                                        placeholder="9:00-12:00"
+                                        value={formData.timeInterval}
+                                        onChange={handleChange}
+                                        className="px-[24px] py-[16px] border-black border-solid border-2 w-full"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex flex-col gap-[8px]">
+                            <div className="flex text-[14px] opacity-70 gap-[8px]">
+                                <div>Количество гостей</div>
+                            </div>
+                            <div className="select-wrapper">
+                                <select
+                                    className="custom-select"
+                                    name="guestCount"
+                                    value={formData.guestCount}
+                                    onChange={handleChange}
+                                    required
+                                >
+                                    <option value="0-50">0-50</option>
+                                    <option value="50-100">50-100</option>
+                                    <option value="100-200">100-200</option>
+                                    <option value="200+">более 200</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <input type="checkbox" required value={personAccept} onChange={(e) => setPersonAccept(e.target.checked)} id="accept_pers_data" /> <label htmlFor="accept_pers_data" className="text-[12px]"><Link className='text-black underline' to="https://docs.google.com/document/d/1ZeJG7cl2raszu6VWoclo38WSxZKl_qRt/edit">Согласен</Link> на обработку моих персональных данных согласно <Link className='text-black underline' to={"https://docs.google.com/document/d/13SBC6s4-XB9GCrZEUbNjqsj-_SBw5nvE/edit"}>Политике</Link></label>
+                        </div>
+                        <div className={`mb-6 ${disabled ? "opacity-50" : ""}`}>
+                            <DarkButton disabled={disabled} text={"Обновить"} />
+                        </div>
+                    </div>
+                </form>
+
+            </div>
+        </div>
+    );
+}
+
+export default EditMyApplication;
